@@ -1,0 +1,96 @@
+// 의류 쇼핑몰 랜딩페이지 - 데이터 모델 (초안)
+// BRD/PRD 확정 후 필드 조정 예정.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// 판매 상품 (원페이지에 노출)
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  price       Int      // 원 단위
+  category    String?  // 예: 아우터, 상의, 하의, 악세서리
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images    ProductImage[]
+  inquiries Inquiry[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// 상품 이미지 (Supabase Storage URL)
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+enum InquiryStatus {
+  NEW         // 신규
+  IN_PROGRESS // 상담중
+  DONE        // 구매완료
+  HOLD        // 보류
+  SPAM        // 스팸
+}
+
+/// 구입 문의 (고객이 랜딩페이지에서 제출)
+model Inquiry {
+  id           String        @id @default(cuid())
+  productId    String?
+  /// 폼에서 고른 상품명 (정적 상품 목록 기준, Product 연결 전까지 사용)
+  productName  String?
+  customerName String
+  phone        String
+  email        String?
+  size         String?
+  quantity     Int           @default(1)
+  contactTime  String?       // 연락 희망 시간대
+  referral     String?       // 유입 경로
+  message      String
+  status       InquiryStatus @default(NEW)
+  /// 관리자가 상세를 처음 연 시각 (null = 미확인)
+  viewedAt     DateTime?
+  ipAddress    String?
+  userAgent    String?
+  /// 소프트 삭제 (휴지통)
+  deletedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  product Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  memos   InquiryMemo[]
+
+  @@index([status, createdAt])
+  @@index([deletedAt, viewedAt])
+}
+
+/// 관리자 메모 (상세 화면에서 자유 입력, 작성 시각 자동 기록)
+model InquiryMemo {
+  id        String   @id @default(cuid())
+  inquiryId String
+  content   String
+  /// 작성한 관리자 (Supabase Auth 이메일)
+  author    String?
+  createdAt DateTime @default(now())
+
+  inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([inquiryId, createdAt])
+}
